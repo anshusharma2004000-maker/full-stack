@@ -1,0 +1,19 @@
+:root{
+  --max-width:800px;
+  --accent:#0b5cff;
+}
+body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:20px;background:#f6f8fb}
+.app{max-width:var(--max-width);margin:0 auto;background:#fff;padding:20px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.06)}
+h1{margin-top:0}
+.composer textarea{width:100%;min-height:100px;padding:8px;font-size:15px}
+.platforms{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.platform{background:#fafafa;padding:8px;border-radius:6px;border:1px solid #eee;display:flex;flex-direction:column;min-width:160px}
+.platform small{color:#666}
+.counter{font-size:12px;color:#333;margin-top:6px}
+.error{color:#b00020;font-size:13px;margin-top:6px}
+.actions{margin-top:12px}
+button[disabled]{opacity:0.5}
+.post-list{margin-top:20px}
+.post{padding:10px;border-top:1px solid #eee}
+.meta{font-size:12px;color:#666;display:flex;justify-content:space-between}
+.content{margin:8px 0 0}
