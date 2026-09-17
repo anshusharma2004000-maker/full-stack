@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Planning Board — Post Scheduler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<style>
+  :root{
+    --ink:#171a2e;
+    --ink-soft:#2a2f4d;
+    --paper:#eef0f4;
+    --paper-raised:#ffffff;
+    --line:#d7d9e4;
+    --line-soft:#e4e6ee;
+    --text:#1c1f33;
+    --text-dim:#6b6f8a;
+    --amber:#e0973a;
+    --amber-soft:#faead2;
+    --green:#3f8a63;
+    --green-soft:#e1f1e6;
+    --violet:#7a7ea6;
+    --violet-soft:#e9e9f4;
+    --focus:#3355ff;
+    --radius:10px;
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --ink:#0e1020; --ink-soft:#1a1d33; --paper:#14162a; --paper-raised:#1c1f38;
+      --line:#2c2f4d; --line-soft:#242741; --text:#e9eaf5; --text-dim:#9c9fc2;
+      --amber-soft:#3a2c14; --green-soft:#173525; --violet-soft:#242641;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#0e1020; --ink-soft:#1a1d33; --paper:#14162a; --paper-raised:#1c1f38;
+    --line:#2c2f4d; --line-soft:#242741; --text:#e9eaf5; --text-dim:#9c9fc2;
+    --amber-soft:#3a2c14; --green-soft:#173525; --violet-soft:#242641;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--text);
+    font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased;
+  }
+  .app{ display:flex; min-height:100vh; }
+  .sidebar{
+    width:280px; flex:0 0 280px; background:var(--ink); color:#f1f1f8;
+    padding:28px 22px; display:flex; flex-direction:column; gap:26px;
+  }
+  .brand{ font-family:'Space Grotesk',sans-serif; }
+  .brand h1{ font-size:19px; margin:0 0 4px; letter-spacing:-0.01em; }
+  .brand p{ margin:0; font-size:13px; color:#a9adc9; line-height:1.5; }
+
+  .panel-title{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#8d91b5; margin:0 0 10px; font-weight:600;}
+  .legend{ display:flex; flex-direction:column; gap:8px; }
+  .legend-row{ display:flex; align-items:center; gap:9px; font-size:13px; color:#d6d8ea; }
+  .dot{ width:9px; height:9px; border-radius:50%; flex:0 0 9px; }
+  .dot.scheduled{ background:var(--amber); }
+  .dot.published{ background:var(--green); }
+  .dot.draft{ background:var(--violet); }
+
+  .queue{ display:flex; flex-direction:column; gap:8px; min-height:40px; }
+  .queue.dragover{ outline:2px dashed #6d72a3; outline-offset:4px; border-radius:8px; }
+  .qcard{
+    background:var(--ink-soft); border:1px solid #33375a; border-radius:8px;
+    padding:9px 11px; cursor:grab; font-size:13px; line-height:1.4;
+  }
+  .qcard b{ display:block; font-size:13px; font-weight:600; margin-bottom:2px; }
+  .qcard span{ color:#9296bb; font-size:11.5px; }
+  .qcard:active{ cursor:grabbing; }
+  .empty-note{ font-size:12.5px; color:#8d91b5; font-style:italic; }
+
+  .compose-btn{
+    width:100%; padding:10px 12px; border-radius:8px; border:1px dashed #454a76;
+    background:transparent; color:#e3e5f5; font-size:13px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:7px; transition:border-color .12s, background .12s;
+  }
+  .compose-btn:hover{ border-color:var(--amber); background:var(--ink-soft); }
+  .compose-btn .plus{ font-size:15px; line-height:1; }
+
+  .controls{ margin-top:auto; display:flex; flex-direction:column; gap:12px; padding-top:18px; border-top:1px solid #2b2f52; }
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; font-size:12.5px; color:#c7cae4; }
+  .switch{ position:relative; width:36px; height:20px; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{ position:absolute; inset:0; background:#3a3e63; border-radius:20px; transition:.15s; cursor:pointer; }
+  .slider:before{ content:""; position:absolute; width:14px; height:14px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
+  .switch input:checked + .slider{ background:var(--amber); }
+  .switch input:checked + .slider:before{ transform:translateX(16px); }
+  .render-stat{ font-family:'JetBrains Mono',monospace; font-size:11px; color:#8d91b5; }
+
+  .main{ flex:1; min-width:0; padding:28px 34px; display:flex; flex-direction:column; gap:18px; }
+  .cal-header{ display:flex; align-items:center; justify-content:space-between; }
+  .cal-header h2{ font-family:'Space Grotesk',sans-serif; font-size:24px; margin:0; letter-spacing:-0.01em; }
+  .nav-btns{ display:flex; gap:6px; align-items:center; }
+  .nav-btns button{
+    border:1px solid var(--line); background:var(--paper-raised); color:var(--text);
+    width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:15px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .nav-btns button:hover{ border-color:var(--amber); color:var(--amber); }
+  .nav-btns .today-btn{ width:auto; padding:0 12px; font-size:12.5px; font-weight:600; }
+
+  .weekday-row{ display:grid; grid-template-columns:repeat(7,1fr); gap:8px; padding:0 2px; }
+  .weekday-row span{ font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); font-weight:600; text-align:left; padding-left:4px;}
+
+  .grid{ display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:112px; gap:8px; }
+
+  .day-cell{
+    background:var(--paper-raised); border:1px solid var(--line-soft); border-radius:var(--radius);
+    padding:7px 7px 6px; display:flex; flex-direction:column; gap:5px; position:relative;
+    overflow:hidden; transition:border-color .12s, box-shadow .12s;
+  }
+  .day-cell.outside{ background:transparent; border-style:dashed; opacity:.45; }
+  .day-cell.today{ border-color:var(--amber); box-shadow:0 0 0 1px var(--amber) inset; }
+  .day-cell.dragover{ border-color:var(--focus); box-shadow:0 0 0 2px var(--focus) inset; }
+  .day-cell.flash{ animation:flashbg .4s ease-out; }
+  @keyframes flashbg{ 0%{ background:#cfe0ff; } 100%{ background:var(--paper-raised); } }
+  :root[data-theme="dark"] .day-cell.flash, :root:not([data-theme="light"]) .day-cell.flash{
+    animation-name:flashbgdark;
+  }
+  @keyframes flashbgdark{ 0%{ background:#2a3a63; } 100%{ background:var(--paper-raised); } }
+
+  .day-num{ font-size:12px; font-weight:600; color:var(--text-dim); }
+  .day-cell.today .day-num{ color:var(--amber); }
+  .render-badge{
+    position:absolute; top:5px; right:6px; font-family:'JetBrains Mono',monospace; font-size:9.5px;
+    color:var(--text-dim); background:var(--line-soft); border-radius:4px; padding:1px 4px; opacity:.85;
+  }
+  .day-posts{ display:flex; flex-direction:column; gap:4px; overflow:hidden; }
+  .post-card{
+    font-size:11px; line-height:1.3; padding:3px 6px; border-radius:6px; cursor:grab;
+    border:1px solid transparent; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    display:flex; align-items:center; gap:5px;
+  }
+  .post-card:active{ cursor:grabbing; }
+  .post-card.scheduled{ background:var(--amber-soft); color:#8a5a13; }
+  .post-card.published{ background:var(--green-soft); color:#276244; }
+  .post-card .time{ font-family:'JetBrains Mono',monospace; font-size:9.5px; opacity:.75; flex:0 0 auto; }
+
+  .detail{
+    position:fixed; top:0; right:0; height:100vh; width:340px; background:var(--paper-raised);
+    border-left:1px solid var(--line); box-shadow:-14px 0 34px rgba(20,20,40,.14);
+    transform:translateX(100%); transition:transform .2s ease; padding:24px; display:flex; flex-direction:column; gap:14px; z-index:20;
+  }
+  .detail.open{ transform:translateX(0); }
+  .detail h3{ margin:0; font-family:'Space Grotesk',sans-serif; font-size:17px; }
+  .detail label{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); font-weight:600; display:block; margin-bottom:5px; }
+  .detail input, .detail select{
+    width:100%; padding:8px 10px; border-radius:7px; border:1px solid var(--line); background:var(--paper);
+    color:var(--text); font-size:13.5px; font-family:'Inter',sans-serif;
+  }
+  .detail .row{ display:flex; flex-direction:column; gap:0; }
+  .detail .two{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .detail .hint{ font-size:12px; color:var(--text-dim); margin:-4px 0 0; line-height:1.4; }
+  .detail .field-error{ font-size:11.5px; color:#b24444; margin-top:5px; }
+  .detail .close{ position:absolute; top:20px; right:20px; border:none; background:none; font-size:18px; cursor:pointer; color:var(--text-dim); }
+  .detail-actions{ margin-top:auto; display:flex; gap:8px; }
+  .btn{ flex:1; padding:9px; border-radius:7px; border:1px solid var(--line); background:var(--paper); cursor:pointer; font-size:13px; font-weight:600; color:var(--text); }
+  .btn.primary{ background:var(--ink); color:#fff; border-color:var(--ink); }
+  .btn.danger{ color:#b24444; border-color:#e7c2c2; }
+  .scrim{ position:fixed; inset:0; background:rgba(15,16,30,.25); z-index:19; opacity:0; pointer-events:none; transition:opacity .2s; }
+  .scrim.open{ opacity:1; pointer-events:auto; }
+
+  @media (max-width: 780px){
+    .app{ flex-direction:column; }
+    .sidebar{ width:100%; flex:none; }
+    .grid{ grid-auto-rows:84px; }
+    .detail{ width:100%; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="env,react">
+const { useState, useReducer, useMemo, useCallback, useRef, useEffect, memo } = React;
+
+/* ---------- data ---------- */
+const PLATFORMS = ["Instagram","X","LinkedIn","TikTok"];
+const pad = n => String(n).padStart(2,"0");
+const dkey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
+
+function seedPosts(){
+  const y=2026, m=8; // September 2026
+  return [
+    {id:"p1", title:"Autumn product teaser", platform:"Instagram", time:"09:00", status:"scheduled", date:dkey(y,m,3)},
+    {id:"p2", title:"Founder AMA recap", platform:"X", time:"14:30", status:"published", date:dkey(y,m,4)},
+    {id:"p3", title:"Customer spotlight: Rivet Co.", platform:"LinkedIn", time:"11:00", status:"scheduled", date:dkey(y,m,4)},
+    {id:"p4", title:"Behind the scenes reel", platform:"TikTok", time:"18:00", status:"scheduled", date:dkey(y,m,9)},
+    {id:"p5", title:"Q3 roadmap thread", platform:"X", time:"10:00", status:"scheduled", date:dkey(y,m,12)},
+    {id:"p6", title:"Hiring: Design lead", platform:"LinkedIn", time:"08:30", status:"published", date:dkey(y,m,15)},
+    {id:"p7", title:"Weekly tips carousel", platform:"Instagram", time:"12:00", status:"scheduled", date:dkey(y,m,15)},
+    {id:"p8", title:"Community challenge kickoff", platform:"TikTok", time:"17:00", status:"scheduled", date:dkey(y,m,22)},
+    {id:"p9", title:"Changelog: v2.3", platform:"X", time:"09:15", status:"scheduled", date:dkey(y,m,25)},
+    {id:"q1", title:"Holiday campaign draft", platform:"Instagram", time:"—", status:"draft", date:null},
+    {id:"q2", title:"Partner co-post copy", platform:"LinkedIn", time:"—", status:"draft", date:null},
+    {id:"q3", title:"Tutorial script v1", platform:"TikTok", time:"—", status:"draft", date:null},
+  ];
+}
+
+/* ---------- reducer (redux-style) ---------- */
+const initialState = {
+  cursor: new Date(2026, 8, 1),
+  posts: seedPosts(),
+  selectedId: null,
+  optimize: true,
+  debug: false,
+};
+
+function reducer(state, action){
+  switch(action.type){
+    case "PREV_MONTH": {
+      const c = new Date(state.cursor); c.setMonth(c.getMonth()-1);
+      return { ...state, cursor: c };
+    }
+    case "NEXT_MONTH": {
+      const c = new Date(state.cursor); c.setMonth(c.getMonth()+1);
+      return { ...state, cursor: c };
+    }
+    case "TODAY":
+      return { ...state, cursor: new Date(2026,8,1) };
+    case "PLACE_POST": {
+      const posts = state.posts.map(p => p.id === action.id
+        ? { ...p, date: action.date, time: p.time === "—" ? "09:00" : p.time, status: p.status === "draft" ? "scheduled" : p.status }
+        : p);
+      return { ...state, posts };
+    }
+    case "UNSCHEDULE": {
+      const posts = state.posts.map(p => p.id === action.id ? { ...p, date:null, status:"draft", time:"—" } : p);
+      return { ...state, posts };
+    }
+    case "ADD_POST": {
+      return { ...state, posts: [...state.posts, action.post] };
+    }
+    case "SELECT":
+      return { ...state, selectedId: action.id };
+    case "UPDATE_POST": {
+      const posts = state.posts.map(p => p.id === action.id ? { ...p, ...action.patch } : p);
+      return { ...state, posts };
+    }
+    case "DELETE_POST":
+      return { ...state, posts: state.posts.filter(p => p.id !== action.id), selectedId: null };
+    case "TOGGLE_OPTIMIZE":
+      return { ...state, optimize: !state.optimize };
+    case "TOGGLE_DEBUG":
+      return { ...state, debug: !state.debug };
+    default:
+      return state;
+  }
+}
+
+/* ---------- perf: grouping with reference stability ---------- */
+function samePost(a,b){
+  return a && b && a.id===b.id && a.title===b.title && a.time===b.time &&
+    a.platform===b.platform && a.status===b.status && a.date===b.date;
+}
+function useGroupedByDate(posts){
+  const prevRef = useRef({});
+  return useMemo(() => {
+    const raw = {};
+    for (const p of posts){
+      if (!p.date) continue;
+      (raw[p.date] = raw[p.date] || []).push(p);
+    }
+    const prev = prevRef.current;
+    const next = {};
+    for (const date in raw){
+      const arr = raw[date];
+      const prevArr = prev[date];
+      if (prevArr && prevArr.length === arr.length && prevArr.every((p,i) => samePost(p, arr[i]))){
+        next[date] = prevArr; // stable reference -> memo skip downstream
+      } else {
+        next[date] = arr;
+      }
+    }
+    prevRef.current = next;
+    return next;
+  }, [posts]);
+}
+
+/* ---------- presentational pieces ---------- */
+const PostCard = memo(function PostCard({ post, onSelect, onDragStart }){
+  return (
+    <div
+      className={`post-card ${post.status}`}
+      draggable
+      data-id={post.id}
+      onDragStart={onDragStart}
+      onClick={onSelect}
+      title={post.title}
+    >
+      <span className="time">{post.time}</span>
+      <span>{post.title}</span>
+    </div>
+  );
+});
+
+function DayCellBase({ dateKey, dayNum, isOutside, isToday, posts, onDrop, onDragOver, onSelect, onDragStart, onCompose, debug }){
+  const cellRef = useRef(null);
+  const badgeRef = useRef(null);
+  const countRef = useRef(0);
+
+  useEffect(() => {
+    countRef.current += 1;
+    if (badgeRef.current) badgeRef.current.textContent = countRef.current;
+    if (debug && cellRef.current){
+      cellRef.current.classList.add("flash");
+      const t = setTimeout(() => cellRef.current && cellRef.current.classList.remove("flash"), 380);
+      return () => clearTimeout(t);
+    }
+  });
+
+  return (
+    <div
+      ref={cellRef}
+      className={`day-cell ${isOutside ? "outside" : ""} ${isToday ? "today" : ""}`}
+      data-date={dateKey}
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+      onDoubleClick={onCompose}
+      title="Double-click to compose a post on this day"
+    >
+      <span className="day-num">{dayNum}</span>
+      {debug && <span ref={badgeRef} className="render-badge">0</span>}
+      <div className="day-posts">
+        {posts.map(p => (
+          <PostCard key={p.id} post={p} onSelect={onSelect} onDragStart={onDragStart} />
+        ))}
+      </div>
+    </div>
+  );
+}
+const DayCellMemo = memo(DayCellBase, (prev, next) =>
+  prev.posts === next.posts &&
+  prev.isToday === next.isToday &&
+  prev.isOutside === next.isOutside &&
+  prev.debug === next.debug &&
+  prev.onCompose === next.onCompose
+);
+
+/* ---------- detail panel ---------- */
+function DetailPanel({ post, onClose, onUpdate, onDelete, onUnschedule }){
+  const open = !!post;
+  const [draft, setDraft] = useState(post);
+  useEffect(() => { setDraft(post); }, [post]);
+  if (!draft) return <div className={`detail ${open?"open":""}`} />;
+
+  return (
+    <>
+      <div className={`scrim ${open?"open":""}`} onClick={onClose} />
+      <div className={`detail ${open?"open":""}`}>
+        <button className="close" onClick={onClose}>✕</button>
+        <h3>Edit post</h3>
+        <div className="row">
+          <label>Title</label>
+          <input value={draft.title} onChange={e=>setDraft({...draft, title:e.target.value})} />
+        </div>
+        <div className="two">
+          <div className="row">
+            <label>Platform</label>
+            <select value={draft.platform} onChange={e=>setDraft({...draft, platform:e.target.value})}>
+              {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="row">
+            <label>Time</label>
+            <input type="time" value={draft.time==="—"?"09:00":draft.time} onChange={e=>setDraft({...draft, time:e.target.value})} />
+          </div>
+        </div>
+        <div className="row">
+          <label>Status</label>
+          <select value={draft.status} onChange={e=>setDraft({...draft, status:e.target.value})}>
+            <option value="draft">Draft</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="published">Published</option>
+          </select>
+        </div>
+        <div className="detail-actions">
+          <button className="btn" onClick={() => { onUnschedule(draft.id); onClose(); }}>Move to queue</button>
+          <button className="btn danger" onClick={() => onDelete(draft.id)}>Delete</button>
+        </div>
+        <button className="btn primary" onClick={() => { onUpdate(draft.id, draft); onClose(); }}>Save changes</button>
+      </div>
+    </>
+  );
+}
+
+/* ---------- composer ---------- */
+let nextId = 100;
+function PostComposer({ prefillDate, onClose, onCreate }){
+  const open = prefillDate !== undefined;
+  const blank = { title:"", platform: PLATFORMS[0], time:"09:00", date: prefillDate || "" };
+  const [draft, setDraft] = useState(blank);
+  const [error, setError] = useState("");
+  useEffect(() => { if (open) { setDraft({ ...blank, date: prefillDate || "" }); setError(""); } }, [open, prefillDate]);
+
+  if (!open) return null;
+
+  const submit = () => {
+    if (!draft.title.trim()){ setError("Give the post a title before saving."); return; }
+    const post = {
+      id: `p${nextId++}`,
+      title: draft.title.trim(),
+      platform: draft.platform,
+      time: draft.date ? (draft.time || "09:00") : "—",
+      status: draft.date ? "scheduled" : "draft",
+      date: draft.date || null,
+    };
+    onCreate(post);
+    onClose();
+  };
+
+  return (
+    <>
+      <div className="scrim open" onClick={onClose} />
+      <div className="detail open">
+        <button className="close" onClick={onClose}>✕</button>
+        <h3>New post</h3>
+        <div className="row">
+          <label>Title</label>
+          <input autoFocus value={draft.title} onChange={e=>setDraft({...draft, title:e.target.value})} placeholder="What are you posting?" />
+        </div>
+        <div className="two">
+          <div className="row">
+            <label>Platform</label>
+            <select value={draft.platform} onChange={e=>setDraft({...draft, platform:e.target.value})}>
+              {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="row">
+            <label>Time</label>
+            <input type="time" value={draft.time} onChange={e=>setDraft({...draft, time:e.target.value})} disabled={!draft.date} />
+          </div>
+        </div>
+        <div className="row">
+          <label>Date</label>
+          <input type="date" value={draft.date} onChange={e=>setDraft({...draft, date:e.target.value})} />
+          <p className="hint">{draft.date ? "Goes straight onto the calendar as Scheduled." : "Leave blank to send it to the queue as a Draft — drag it onto a day later."}</p>
+        </div>
+        {error && <p className="field-error">{error}</p>}
+        <div className="detail-actions">
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={submit}>Save post</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ---------- app ---------- */
+function App(){
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const { cursor, posts, selectedId, optimize, debug } = state;
+
+  const grouped = useGroupedByDate(posts);
+  const unscheduled = useMemo(() => posts.filter(p => !p.date), [posts]);
+  const selected = useMemo(() => posts.find(p => p.id === selectedId) || null, [posts, selectedId]);
+
+  // stable handlers (identity never changes -> supports memoization)
+  const onSelect = useCallback((e) => {
+    dispatch({ type:"SELECT", id: e.currentTarget.dataset.id });
+  }, []);
+  const onDragStart = useCallback((e) => {
+    e.dataTransfer.setData("text/plain", e.currentTarget.dataset.id);
+  }, []);
+  const onDragOver = useCallback((e) => { e.preventDefault(); }, []);
+  const onDrop = useCallback((e) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    const date = e.currentTarget.dataset.date;
+    if (id && date) dispatch({ type:"PLACE_POST", id, date });
+  }, []);
+  const onQueueDrop = useCallback((e) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    if (id) dispatch({ type:"UNSCHEDULE", id });
+  }, []);
+  const onUpdate = useCallback((id, patch) => dispatch({ type:"UPDATE_POST", id, patch }), []);
+  const onDelete = useCallback((id) => dispatch({ type:"DELETE_POST", id }), []);
+  const onUnschedule = useCallback((id) => dispatch({ type:"UNSCHEDULE", id }), []);
+  const onClose = useCallback(() => dispatch({ type:"SELECT", id:null }), []);
+
+  const [queueOver, setQueueOver] = useState(false);
+  const [composerDate, setComposerDate] = useState(undefined); // undefined = closed
+  const openComposerFor = useCallback((e) => setComposerDate(e.currentTarget.dataset.date), []);
+  const openComposerBlank = useCallback(() => setComposerDate(""), []);
+  const closeComposer = useCallback(() => setComposerDate(undefined), []);
+  const onCreatePost = useCallback((post) => dispatch({ type:"ADD_POST", post }), []);
+
+  const monthLabel = cursor.toLocaleDateString("en-US", { month:"long", year:"numeric" });
+  const weeks = useMemo(() => {
+    const y = cursor.getFullYear(), m = cursor.getMonth();
+    const first = new Date(y,m,1);
+    const startWeekday = first.getDay();
+    const daysInMonth = new Date(y,m+1,0).getDate();
+    const daysInPrev = new Date(y,m,0).getDate();
+    const cells = [];
+    for (let i=0;i<startWeekday;i++){
+      const dn = daysInPrev - startWeekday + 1 + i;
+      const pm = m===0 ? 11 : m-1, py = m===0 ? y-1 : y;
+      cells.push({ dateKey: dkey(py,pm,dn), dayNum: dn, outside:true });
+    }
+    for (let d=1; d<=daysInMonth; d++){
+      cells.push({ dateKey: dkey(y,m,d), dayNum: d, outside:false });
+    }
+    while (cells.length % 7 !== 0){
+      const dn = cells.length - (startWeekday + daysInMonth) + 1;
+      const nm = m===11 ? 0 : m+1, ny = m===11 ? y+1 : y;
+      cells.push({ dateKey: dkey(ny,nm,dn), dayNum: dn, outside:true });
+    }
+    const rows = [];
+    for (let i=0;i<cells.length;i+=7) rows.push(cells.slice(i,i+7));
+    return rows;
+  }, [cursor]);
+
+  const todayKey = "2026-09-17";
+  const CellComponent = optimize ? DayCellMemo : DayCellBase;
+
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <div className="brand">
+          <h1>Planning Board</h1>
+          <p>Drag drafts onto the calendar to schedule them, or double-click any day to compose one directly on that date.</p>
+        </div>
+
+        <button className="compose-btn" onClick={openComposerBlank}>
+          <span className="plus">+</span> New post
+        </button>
+
+        <div>
+          <p className="panel-title">Legend</p>
+          <div className="legend">
+            <div className="legend-row"><span className="dot scheduled"></span> Scheduled</div>
+            <div className="legend-row"><span className="dot published"></span> Published</div>
+            <div className="legend-row"><span className="dot draft"></span> Draft (unscheduled)</div>
+          </div>
+        </div>
+
+        <div>
+          <p className="panel-title">Queue · {unscheduled.length}</p>
+          <div
+            className={`queue ${queueOver?"dragover":""}`}
+            onDragOver={(e)=>{e.preventDefault(); setQueueOver(true);}}
+            onDragLeave={()=>setQueueOver(false)}
+            onDrop={(e)=>{setQueueOver(false); onQueueDrop(e);}}
+          >
+            {unscheduled.length === 0 && <p className="empty-note">Nothing waiting — drag a post here to unschedule it.</p>}
+            {unscheduled.map(p => (
+              <div key={p.id} className="qcard" draggable data-id={p.id} onDragStart={onDragStart} onClick={onSelect}>
+                <b>{p.title}</b>
+                <span>{p.platform}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="controls">
+          <div className="toggle-row">
+            <span>Memoization (React.memo)</span>
+            <label className="switch">
+              <input type="checkbox" checked={optimize} onChange={()=>dispatch({type:"TOGGLE_OPTIMIZE"})} />
+              <span className="slider"></span>
+            </label>
+          </div>
+          <div className="toggle-row">
+            <span>Show render activity</span>
+            <label className="switch">
+              <input type="checkbox" checked={debug} onChange={()=>dispatch({type:"TOGGLE_DEBUG"})} />
+              <span className="slider"></span>
+            </label>
+          </div>
+          {debug && (
+            <p className="render-stat">
+              {optimize
+                ? "flash = cell actually re-rendered · unaffected days stay still"
+                : "unoptimized: every cell re-renders on any change"}
+            </p>
+          )}
+        </div>
+      </aside>
+
+      <main className="main">
+        <div className="cal-header">
+          <h2>{monthLabel}</h2>
+          <div className="nav-btns">
+            <button onClick={()=>dispatch({type:"PREV_MONTH"})}>‹</button>
+            <button className="today-btn" onClick={()=>dispatch({type:"TODAY"})}>Today</button>
+            <button onClick={()=>dispatch({type:"NEXT_MONTH"})}>›</button>
+          </div>
+        </div>
+
+        <div className="weekday-row">
+          {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => <span key={d}>{d}</span>)}
+        </div>
+
+        <div className="grid">
+          {weeks.flat().map(cell => (
+            <CellComponent
+              key={cell.dateKey}
+              dateKey={cell.dateKey}
+              dayNum={cell.dayNum}
+              isOutside={cell.outside}
+              isToday={cell.dateKey === todayKey}
+              posts={grouped[cell.dateKey] || EMPTY_ARR}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onSelect={onSelect}
+              onDragStart={onDragStart}
+              onCompose={openComposerFor}
+              debug={debug}
+            />
+          ))}
+        </div>
+      </main>
+
+      <DetailPanel post={selected} onClose={onClose} onUpdate={onUpdate} onDelete={onDelete} onUnschedule={onUnschedule} />
+      <PostComposer prefillDate={composerDate} onClose={closeComposer} onCreate={onCreatePost} />
+    </div>
+  );
+}
+const EMPTY_ARR = [];
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
